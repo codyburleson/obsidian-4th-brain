@@ -1,5 +1,13 @@
-# Obsidian Sample Plugin
+# Obsidian 4th Brain Plugin
 
+## Developer Getting Started
+
+- Modify the paths in `./deploy.sh` to point to the vault you wish to deploy the plugin into
+- Execute `yarn install` to install package dependencies
+- Execute `yarn build` to build the plugin
+- Execute `yarn deploy` to deploy the plugin
+
+## Obsidian Sample Plugin 
 This is a sample plugin for Obsidian (https://obsidian.md).
 
 This project uses TypeScript to provide type checking and documentation.
