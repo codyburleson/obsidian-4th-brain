@@ -2,12 +2,14 @@ import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Set
 
 // Remember to rename these classes and interfaces!
 
-interface MyPluginSettings {
-	mySetting: string;
+export interface MyPluginSettings {
+    supabaseUrl: string;
+    supabaseAnonKey: string;
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
+    supabaseUrl: '',
+    supabaseAnonKey: '',
 }
 
 export default class MyPlugin extends Plugin {
@@ -120,15 +122,27 @@ class SampleSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
-		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
-			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
-				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-				}));
+
+        new Setting(containerEl)
+            .setName('Supabase URL')
+            .setDesc('The URL of your Supabase project')
+            .addText(text => text
+                .setPlaceholder('project URL')
+                .setValue(this.plugin.settings.supabaseUrl)
+                .onChange(async (value) => {
+                    this.plugin.settings.supabaseUrl = value;
+                    await this.plugin.saveSettings();
+                }));
+
+         new Setting(containerEl)
+            .setName('Supabase Anon Key')
+            .setDesc('The Supabase project anon key. If you are hosting Supabase yourself, you can fing this in the .env file (ANON_KEY in supabase/docker/.env)')
+            .addText(text => text
+                .setPlaceholder('anon key')
+                .setValue(this.plugin.settings.supabaseAnonKey)
+                .onChange(async (value) => {
+                    this.plugin.settings.supabaseAnonKey = value;
+                    await this.plugin.saveSettings();
+                }));     
 	}
 }
