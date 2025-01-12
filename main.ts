@@ -7,8 +7,9 @@ import {
 	Plugin,
 	PluginSettingTab,
 	Setting,
+    TFile
 } from "obsidian";
-import { SupabaseService } from "supabase-service";
+import { SupabaseService } from "./src/supabase-service";
 
 // Remember to rename these classes and interfaces!
 
@@ -30,7 +31,22 @@ export default class MyPlugin extends Plugin {
 	settings: MyPluginSettings;
 
 	async onload() {
+
 		await this.loadSettings();
+
+
+        this.registerEvent(this.app.workspace.on(
+            'file-menu',
+            (menu, file) => {
+                if (file instanceof TFile && (file.extension === 'canvas' || file.extension === 'md')) {
+                    menu.addItem((item) => {
+                        item.setTitle('Sync With Supabase').onClick(async () => {
+                            console.log('>> 4thBrain > Sync With Supabase');
+                        });
+                    });
+                }
+            }
+        ));
 
 		// This creates an icon in the left ribbon.
 		const ribbonIconEl = this.addRibbonIcon(
