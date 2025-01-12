@@ -1,102 +1,58 @@
 # Obsidian 4th Brain Plugin
 
-## Developer Getting Started
+## Vision
 
-- Modify the paths in `./deploy.sh` to point to the vault you wish to deploy the plugin into
-- Execute `yarn install` to install package dependencies
-- Execute `yarn build` to build the plugin
-- Execute `yarn deploy` to deploy the plugin
+The Obsidian 4th Brain plugin aims to create harmony between human cognition, digital note-taking, community wisdom, and artificial intelligence. This plugin will extend Obsidian's capabilities by integrating these four types of intelligence into a cohesive knowledge management ecosystem.
 
-## Obsidian Sample Plugin 
-This is a sample plugin for Obsidian (https://obsidian.md).
+Rather than competing with existing tools or forcing users to choose between different approaches, 4th Brain seeks to create synergy between different types of intelligence: your brain, your digital notes, community knowledge, and AI assistance.
 
-This project uses TypeScript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
+## Planned Features
 
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open Sample Modal" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and output 'click' to the console.
-- Registers a global interval which logs 'setInterval' to the console.
+Multi-Channel Publishing: Seamlessly publish Obsidian notes to various platforms (Medium, Substack, etc.) with smart format adaptation
+Community Integration: Share and discover PKM patterns and mental models within the community
+AI Augmentation: Leverage AI agents that understand PKM standards and help maintain knowledge base consistency
+Self-Hosted Publishing: Alternative to Obsidian Publish with unique customization options
 
-## First time developing plugins?
+## Development Status
 
-Quick starting guide for new plugin devs:
+This project is in its early stages of development. We are committed to building in public and welcome community involvement from the start. Current focus areas:
 
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `main.ts` to `main.js`.
-- Make changes to `main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
+- Setting up the self-hosted publishing platform
+- Building the foundational plugin architecture
+- Establishing community standards framework
+- Designing the agent system architecture
 
-## Releasing new releases
+## Why Open Source from Day One?
 
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
+We believe in transparency and community-driven development. By making this repository public from the beginning, we aim to:
 
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
+- Share our development journey
+- Gather early feedback and ideas
+- Build a community of contributors
+- Establish open standards for PKM together
 
-## Adding your plugin to the community plugin list
+## Community Standards
 
-- Check the [plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines).
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
+This plugin will adhere to and help establish PKM (Personal Knowledge Management) standards. 
+We believe in creating open standards that can drive tool integration and AI augmentation in the knowledge management space.
 
-## How to use
+## Contributing
 
-- Clone this repo.
-- Make sure your NodeJS is at least v16 (`node --version`).
-- `npm i` or `yarn` to install dependencies.
-- `npm run dev` to start compilation in watch mode.
+While the plugin is not yet ready for use, there are many ways to get involved:
 
-## Manually installing the plugin
+- Star and watch this repository for updates
+- Discuss features and architecture in this project's [Discussions](https://github.com/codyburleson/obsidian-4th-brain/discussions) forum
+- Source code contributions are not yet invited, but Contributing Guidelines will be published when the code base reaches that stage.
 
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
+## Project Updates
 
-## Improve code quality with eslint (optional)
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code. 
-- To use eslint with this project, make sure to install eslint from terminal:
-  - `npm install -g eslint`
-- To use eslint to analyze this project use this command:
-  - `eslint main.ts`
-  - eslint will then create a report with suggestions for code improvement by file and line number.
-- If your source code is in a folder, such as `src`, you can use eslint with this command to analyze all files in that folder:
-  - `eslint .\src\`
+- [Follow the development journey on Medium](https://medium.com/@cody.burleson)
+- [Subscribe to get Medium updates by email](https://medium.com/@cody.burleson/subscribe)
 
-## Funding URL
+## License
 
-You can include funding URLs where people who use your plugin can financially support it.
+MIT License
 
-The simple way is to set the `fundingUrl` field to your link in your `manifest.json` file:
+---
 
-```json
-{
-    "fundingUrl": "https://buymeacoffee.com"
-}
-```
-
-If you have multiple URLs, you can also do:
-
-```json
-{
-    "fundingUrl": {
-        "Buy Me a Coffee": "https://buymeacoffee.com",
-        "GitHub Sponsor": "https://github.com/sponsors",
-        "Patreon": "https://www.patreon.com/"
-    }
-}
-```
-
-## API Documentation
-
-See https://github.com/obsidianmd/obsidian-api
+Join us in building the future of integrated knowledge management! ❤️
