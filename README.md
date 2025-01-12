@@ -8,16 +8,16 @@ Rather than competing with existing tools or forcing users to choose between dif
 
 ## Planned Features
 
-Multi-Channel Publishing: Seamlessly publish Obsidian notes to various platforms (Medium, Substack, etc.) with smart format adaptation
-Community Integration: Share and discover PKM patterns and mental models within the community
-AI Augmentation: Leverage AI agents that understand PKM standards and help maintain knowledge base consistency
-Self-Hosted Publishing: Alternative to Obsidian Publish with unique customization options
+- **Multi-Channel Publishing:** Seamlessly publish Obsidian notes to various platforms (Medium, Substack, etc.) with smart format adaptation
+- **Community Integration:** Share and discover PKM patterns and mental models within the community
+- **AI Augmentation:** Leverage AI agents that understand PKM standards and help maintain knowledge base consistency
+- **Self-Hosted Publishing:** Alternative to Obsidian Publish with unique customization options
 
 ## Development Status
 
 This project is in its early stages of development. We are committed to building in public and welcome community involvement from the start. Current focus areas:
 
-- Setting up the self-hosted publishing platform
+- Setting up the self-hosted publishing platform (based on [Supabase](https://supabase.com/))
 - Building the foundational plugin architecture
 - Establishing community standards framework
 - Designing the agent system architecture
