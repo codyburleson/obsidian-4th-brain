@@ -1,7 +1,7 @@
 {
     "id": "4th-brain",
     "name": "4th Brain",
-    "version": "1.0.0",
+    "version": "0.0.1",
     "minAppVersion": "0.15.0",
     "description": "Amazing agentic control of LLMs with Obsidian canvas and markdown documents.",
     "author": "Cody Burleson",

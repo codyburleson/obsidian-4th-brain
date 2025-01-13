@@ -42,12 +42,20 @@ While the plugin is not yet ready for use, there are many ways to get involved:
 
 - Star and watch this repository for updates
 - Discuss features and architecture in this project's [Discussions](https://github.com/codyburleson/obsidian-4th-brain/discussions) forum
-- Source code contributions are not yet invited, but Contributing Guidelines will be published when the code base reaches that stage.
+- Source code contributions are welcome, but the project is still early-stage and Contributing Guidelines have not yet been posted.
 
 ## Project Updates
 
 - [Follow the development journey on Medium](https://medium.com/@cody.burleson)
 - [Subscribe to get Medium updates by email](https://medium.com/@cody.burleson/subscribe)
+
+## Developer Getting Started
+
+- Modify the paths in `./deploy.sh` to point to the vault you wish to deploy the plugin into
+- Execute `yarn install` to install package dependencies
+- Execute `yarn build` to build the plugin
+- Execute `yarn deploy` to deploy the plugin
+- If you wish to host your own Supabase backend for the publishing services, execute the [init-supabase.sql](./init-supabase.sql) script in your Supabase public schema.
 
 ## License
 

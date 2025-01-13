@@ -7,8 +7,9 @@ import {
 	Plugin,
 	PluginSettingTab,
 	Setting,
+    TFile
 } from "obsidian";
-import { SupabaseService } from "supabase-service";
+import { SupabaseService } from "./src/supabase-service";
 
 // Remember to rename these classes and interfaces!
 
@@ -30,7 +31,22 @@ export default class MyPlugin extends Plugin {
 	settings: MyPluginSettings;
 
 	async onload() {
+
 		await this.loadSettings();
+
+
+        this.registerEvent(this.app.workspace.on(
+            'file-menu',
+            (menu, file) => {
+                if (file instanceof TFile && (file.extension === 'canvas' || file.extension === 'md')) {
+                    menu.addItem((item) => {
+                        item.setTitle('Sync With Supabase').onClick(async () => {
+                            console.log('>> 4thBrain > Sync With Supabase');
+                        });
+                    });
+                }
+            }
+        ));
 
 		// This creates an icon in the left ribbon.
 		const ribbonIconEl = this.addRibbonIcon(
@@ -49,12 +65,11 @@ export default class MyPlugin extends Plugin {
 					this.settings.supabasePassword
                 );
 
-
                 let document = {
-                    id: '194e4fe3-d119-44d4-94e6-62d87caa440f',
-                    version: 0,
-                    content: '# Hello 2! /n/n This is a markdown document created by the Obsidian plugin.',
-                    is_latest: true,
+                    id: '8b86d301-0b82-489c-b070-4349f10c5c33',
+                    version: 0, // how to make an auto-incrementing field?
+                    content: '# Hello 4',
+                    //is_latest: true,
                     state: 'published'
                 }
                 console.debug('-- insert result:: ', supabaseService.insertDocument(document));
