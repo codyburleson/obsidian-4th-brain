@@ -11,6 +11,8 @@ $$;
 CREATE TABLE IF NOT EXISTS documents (
     id uuid not null,
     version integer not null,
+    path text not null,
+    name text not null,
     content text not null,
     is_latest boolean not null default true,
     created_at timestamptz default now(),
