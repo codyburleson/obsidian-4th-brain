@@ -9,8 +9,10 @@ import {
   Setting,
   TFile,
 } from "obsidian";
+// import { emitKeypressEvents } from "readline";
 import { SupabaseService } from "./src/supabase-service";
-import { Database, Tables, Enums } from "./src/types/supabase";
+
+//import { Database, Tables, Enums } from "./src/types/supabase";
 
 // Remember to rename these classes and interfaces!
 
@@ -42,11 +44,29 @@ export default class MyPlugin extends Plugin {
         ) {
           menu.addItem((item) => {
             item.setTitle("Sync With Supabase").onClick(async () => {
+              
+              
+              
+              
               try {
                 console.log(">> 4thBrain > Sync With Supabase");
-                console.log(">> 4thBrain > file.path: ", file.path);
-                console.log(">> 4thBrain > file.basename: ", file.basename);
-                console.log(">> 4thBrain > file.extension: ", file.extension);
+                console.log(">> 4thBrain > Sync > file.path: ", file.path);
+                const filePath = file.path;
+                const folderPath = filePath.substring(
+                  0,
+                  filePath.lastIndexOf("/") + 1
+                );
+
+                console.log(">> 4thBrain > Sync > folderPath: ", folderPath);
+
+                console.log(
+                  ">> 4thBrain > Sync > file.basename: ",
+                  file.basename
+                );
+                console.log(
+                  ">> 4thBrain > Sync > file.extension: ",
+                  file.extension
+                );
 
                 const supabaseService = new SupabaseService(
                   this.settings.supabaseUrl,
@@ -65,12 +85,132 @@ export default class MyPlugin extends Plugin {
                   user.email
                 );
 
+                // this.app.fileManager.processFrontMatter.processFrontMatter(file, (fm: any) => {
+                //   console.debug('-- fourth-brain > canvas-utils.parseCard() > Frontmatter from file: ', fm);
+                //   //fileFrontmatter = fm;
+                // })
+
+                enum CrudOperation {
+                  INSERT = "INSERT",
+                  UPDATE = "UPDATE",
+                  DELETE = "DELETE",
+                  NONE = "NONE",
+                }
+
+                let operation = CrudOperation.NONE as CrudOperation;
+
+                // TO DO: Make an Interface for Document
+                let document = {
+                  id: "",
+                  version: 1,
+                  path: "",
+                  name: file.basename,
+                  state: "published",
+                  content: "",
+                };
+
+                await this.app.fileManager
+                  .processFrontMatter(file, (fm) => {
+
+                    console.debug(
+                      "-- 4thbrain > Sync > frontmatter: \n",
+                      JSON.stringify(fm, null, 2)
+                    );
+
+                    // SCENARIO: Sync to update existing document
+                    // GIVEN the Obsidian user selects ‘Sync with Supabase’
+                    // WHEN the right-clicked document has a uuid property
+                    // AND the right-clicked document has a version property
+                    if (fm["uuid"]) {
+                      console.log("document has a uuid: ", fm["uuid"]); 
+                    }
+                    if (fm["version"]) {
+                      console.log("document has a version: ", fm["version"]);
+                    }
+
+
+
+                    if (fm["version"]) {
+                      console.log("document has a version: ", fm["version"]);
+                    }
+                      if (fm["uuid"] && fm["version"]) {
+                      console.log(
+                        "-- 4thbrain > Sync > file has a uuid and version, the corresponding DB doc will be UPDATED: ",
+                        fm.uuid
+                      );
+
+                      // Even when we are theoretically updating an existing do,
+                      // because we manage versions in a single table,  we still need to INSERT
+                      operation = CrudOperation.INSERT;
+
+                      // THEN the version property value is incremented by 1 on the markdown document
+                      document.version = fm["version"] + 1;
+                      fm.version = document.version;
+                    } else {
+                      console.log(
+                        "-- 4thbrain > Sync > file has no uuid, a corresponding DB doc will INSERTED."
+                      );
+                      operation = CrudOperation.INSERT;
+                      let uuid = crypto.randomUUID();
+                      fm.uuid = uuid;
+                      document.id = uuid;
+                      fm.version = 1;
+                      document.version = 1;
+                    }
+
+                    if (fm.state) {
+                      document.state = fm.state;
+                    }
+
+                    document.id = fm.uuid;
+                    document.path = folderPath;
+                  });
+
+                const fileContent = await this.app.vault.cachedRead(file);
+                // console.log(">> 4thBrain > Sync > fileContent: ", fileContent);
+                document.content = fileContent;
+
+                console.debug(
+                  "-- 4thbrain > Sync > document just before CRUD operation: \n",
+                  JSON.stringify(document, null, 2)
+                );
+
+     
+
+                let crudResult;
+                switch (operation) {
+                  case CrudOperation.INSERT:
+                    crudResult = await supabaseService.insertDocument(document);
+                    console.log(
+                      ">> 4thBrain > Sync > INSERT crudResult: ",
+                      crudResult
+                    );
+                    break;
+                  case CrudOperation.UPDATE:
+                    crudResult = await supabaseService.updateDocument(document);
+                    console.log(
+                      ">> 4thBrain > Sync > UPDATE crudResult: ",
+                      crudResult
+                    );
+                    break;
+                  case CrudOperation.DELETE:
+                    // handle delete logic
+                    break;
+                  case CrudOperation.NONE:
+                    // handle none state
+                    break;
+                }
 
                 // TODO: Implement your sync logic here
               } catch (error) {
                 console.error(">> 4thBrain > Error during sync:", error);
                 new Notice("Failed to sync with Supabase: " + error.message);
               }
+
+
+
+
+
             });
           });
         }

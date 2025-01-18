@@ -3,7 +3,7 @@ import {
   SupabaseClient,
   User,
 } from "@supabase/supabase-js";
-import { Database } from "./types/supabase";
+// import { Database } from "./types/supabase";
 
 export class SupabaseService {
   private readonly supabase: SupabaseClient;
@@ -12,7 +12,7 @@ export class SupabaseService {
     // https://www.restack.io/docs/supabase-knowledge-supabase-generate-types
     // The <Database> type ensures that the Supabase client is aware of the database schema,
     // providing autocompletion and type checking for database operations.
-    this.supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
+    this.supabase = createClient(supabaseUrl, supabaseAnonKey);
   }
 
   /**
@@ -118,4 +118,21 @@ export class SupabaseService {
     if (error) throw new Error(`Error inserting document: ${error.message}`);
     return data;
   }
+
+  async updateDocument(document: any) { 
+    console.debug(">> SupabaseService.updateDocument: document: ", document);
+    const user = await this.getUser();
+    console.debug("-- SupabaseService.updateDocument: user: ", user);
+    if (!user) throw new Error("User not authenticated");
+
+    const { data, error } = await this.supabase
+      .from("documents")
+      .update(document)
+      .eq("id", document.id)
+      .select();
+
+    if (error) throw new Error(`Error updating document: ${error.message}`);
+    return data;
+  }
+
 }
