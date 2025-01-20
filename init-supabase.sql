@@ -7,9 +7,9 @@ BEGIN
 END
 $$;
 
--- Create documents table if it doesn't exist
 CREATE TABLE IF NOT EXISTS documents (
     id uuid not null,
+    site_id uuid not null,
     version integer not null,
     path text not null,
     name text not null,
@@ -19,6 +19,22 @@ CREATE TABLE IF NOT EXISTS documents (
     created_by uuid references auth.users(id),
     state document_state not null default 'draft',
     primary key (id, version)
+);
+
+CREATE TABLE IF NOT EXISTS sites (
+    id uuid not null,
+    name text not null,
+    domain text not null,
+    created_at timestamptz default now(),
+    updated_at timestamptz,
+    primary key (id)
+);
+
+CREATE TABLE IF NOT EXISTS site_members (
+    user_id uuid not null,
+    site_id uuid not null,
+    role text not null,
+    joined_at timestamptz
 );
 
 -- Create index on documents table if the index does not exist
