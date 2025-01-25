@@ -188,7 +188,27 @@ export default class MyPlugin extends Plugin {
         this.settings.supabasePassword
       );
 
-      // If we get here, we have an active session with a valid user
+      // Check if site exists before proceeding
+      const siteExists = await supabaseService.siteSlugExists(this.settings.defaultSiteSlug);
+      if (!siteExists) {
+        new CreateSiteModal(this.app, this.settings.defaultSiteSlug, async (confirmedSlug) => {
+          try {
+            const site = await supabaseService.createSite(confirmedSlug);
+            console.debug("Site created successfully:", site);
+            // Now that the site is created, continue with the sync
+            await this.syncWithServer(file);
+          } catch (error) {
+            console.error("Failed to create site:", error);
+            new AlertModal(
+              this.app,
+              `Failed to create site: ${error.message}`
+            ).open();
+          }
+        }).open();
+        return;
+      }
+
+      // If we get here, we have an active session with a valid user and confirmed site
       console.log(">> 4thBrain > Session established for user:", user.email);
 
       // TO DO: Make an Interface for Document
