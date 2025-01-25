@@ -132,12 +132,86 @@ BEGIN
 END
 $$;
 
+-- We rely on PostgreSQL's automatic transaction management for functions. 
+-- Every function automatically runs in a transaction unless explicitly specified otherwise.
+
+CREATE OR REPLACE FUNCTION insert_document_with_site(
+    p_document jsonb,
+    p_site_slug text,
+    p_user_id uuid
+) RETURNS jsonb AS $$
+DECLARE
+    v_site_id uuid;
+    v_result jsonb;
+BEGIN
+    -- Get the site ID
+    SELECT id INTO v_site_id
+    FROM sites
+    WHERE slug = p_site_slug;
+
+    IF v_site_id IS NULL THEN
+        RAISE EXCEPTION 'Site with slug % not found', p_site_slug;
+    END IF;
+
+    -- Insert the document
+    INSERT INTO documents (
+        id,
+        site_id,
+        version,
+        path,
+        name,
+        content,
+        state,
+        created_by
+    )
+    SELECT
+        (p_document->>'id')::uuid,
+        v_site_id,
+        (p_document->>'version')::integer,
+        p_document->>'path',
+        p_document->>'name',
+        p_document->>'content',
+        (p_document->>'state')::document_state,
+        p_user_id
+    RETURNING to_jsonb(documents.*) INTO v_result;
+
+    -- Create the document-site publication
+    INSERT INTO document_site_publications (
+        document_id,
+        document_version,
+        site_id
+    ) VALUES (
+        (p_document->>'id')::uuid,
+        (p_document->>'version')::integer,
+        v_site_id
+    );
+
+    RETURN v_result;
+END;
+$$ LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE FUNCTION delete_document_cascade(document_uuid uuid)
+RETURNS void AS $$
+BEGIN
+    -- Delete document_site_publications records
+    DELETE FROM document_site_publications
+    WHERE document_id = document_uuid;
+
+    -- Delete all versions of the document
+    DELETE FROM documents
+    WHERE id = document_uuid;
+END;
+$$ LANGUAGE plpgsql;
+
 -- *****************************************************
 -- CREATE POLICIES
 -- *****************************************************
 
 -- Enable Row Level Security (RLS) on the documents table if it is not already enabled
 ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sites ENABLE ROW LEVEL SECURITY;
+ALTER TABLE document_site_publications ENABLE ROW LEVEL SECURITY;
 
 -- The `DROP POLICY IF EXISTS` statement will remove the policy if it exists. 
 -- This makes the script idempotent - you can run it multiple times safely. 

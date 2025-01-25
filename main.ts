@@ -37,6 +37,8 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
 export default class MyPlugin extends Plugin {
   settings: MyPluginSettings;
 
+  lastTouchedDocumentUuid: string | null = null;
+
   async onload() {
     await this.loadSettings();
 
@@ -46,6 +48,7 @@ export default class MyPlugin extends Plugin {
           file instanceof TFile &&
           (file.extension === "canvas" || file.extension === "md")
         ) {
+
           menu.addItem((item) => {
             item
               .setTitle("Sync With Server")
@@ -55,6 +58,57 @@ export default class MyPlugin extends Plugin {
                 await this.syncWithServer(file);
               });
           });
+
+          // We need to get the uuid from the frontmatter before the file is deleted
+          this.app.fileManager.processFrontMatter(file, (fm) => {
+
+            // SCENARIO: Sync to update existing document
+            // GIVEN the Obsidian user selects 'Sync with Server
+            // WHEN the markdown document has a uuid property
+            // AND the markdown document has a version property
+    
+            if (fm["uuid"]) {
+              this.lastTouchedDocumentUuid = fm["uuid"];
+            } else {
+              this.lastTouchedDocumentUuid = null;
+            }
+
+            console.log("-- 4thBrain.onLoad() > file-menu > lastTouchedSDocumentUuid: ", this.lastTouchedDocumentUuid);
+
+          });
+
+
+        }
+      })
+    );
+
+    this.registerEvent(
+      this.app.vault.on('delete', async (file) => {
+        console.log("-- 4thBrain.onLoad() > vault.on('delete') > file: ", file);
+        
+        if (file instanceof TFile) {
+          try {
+            if (this.lastTouchedDocumentUuid) {
+              try {
+                const supabase = new SupabaseService(
+                  this.settings.supabaseUrl,
+                  this.settings.supabaseAnonKey
+                );
+                await supabase.ensureSession(
+                  this.settings.supabaseEmail,
+                  this.settings.supabasePassword
+                );
+                await supabase.setDocumentStateToRemoved(this.lastTouchedDocumentUuid);
+                new Notice(`Marked server document ${this.lastTouchedDocumentUuid} as removed`);
+                this.lastTouchedDocumentUuid = null;
+              } catch (error) {
+                console.error('Failed to mark document as removed:', error);
+                new Notice('Failed to mark document as removed');
+              }
+            }
+          } catch (error) {
+            new AlertModal(this.app, `Failed to mark server document as removed with uuid: ${this.lastTouchedDocumentUuid}\n error: ${error.message}`).open();
+          }
         }
       })
     );
@@ -66,26 +120,6 @@ export default class MyPlugin extends Plugin {
       (evt: MouseEvent) => {
         console.debug(
           "-- main.onLoad() RibbonIcon MouseEvent handler triggered..."
-        );
-        let supabaseService = new SupabaseService(
-          this.settings.supabaseUrl,
-          this.settings.supabaseAnonKey
-        );
-        supabaseService.signInWithPassword(
-          this.settings.supabaseEmail,
-          this.settings.supabasePassword
-        );
-
-        let document = {
-          id: "8b86d301-0b82-489c-b070-4349f10c5c33",
-          version: 0, // how to make an auto-incrementing field?
-          content: "# Hello 4",
-          //is_latest: true,
-          state: "published",
-        };
-        console.debug(
-          "-- insert result:: ",
-          supabaseService.insertDocument(document)
         );
         new Notice("RibbonIcon MouseEvent handler triggered ");
       }
@@ -262,7 +296,10 @@ export default class MyPlugin extends Plugin {
         JSON.stringify(document, null, 2)
       );
 
-      let crudResult = await supabaseService.insertDocument(document);
+      let crudResult = await supabaseService.insertDocument(
+        document, 
+        this.settings.defaultSiteSlug
+      );
 
       // TODO: Implement your sync logic here
     } catch (error) {

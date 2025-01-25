@@ -99,25 +99,47 @@ export class SupabaseService {
   }
 
   // TODO: replace with document type or interface...
-  async insertDocument(document: any) {
+  // async insertDocument(document: any) {
+  //   console.debug(">> SupabaseService.insertDocument: document: ", document);
+  //   const user = await this.getUser();
+  //   console.debug("-- SupabaseService.insertDocument: user: ", user);
+  //   if (!user) throw new Error("User not authenticated");
+
+  //   const { data, error } = await this.supabase
+  //     .from("documents")
+  //     .insert([
+  //       {
+  //         ...document,
+  //         created_by: user.id, // Associate document with authenticated user
+  //       },
+  //     ])
+  //     .select();
+
+  //   if (error) throw new Error(`Error inserting document: ${error.message}`);
+  //   return data;
+  // }
+
+  async insertDocument(document: any, siteSlug: string) {
     console.debug(">> SupabaseService.insertDocument: document: ", document);
     const user = await this.getUser();
     console.debug("-- SupabaseService.insertDocument: user: ", user);
     if (!user) throw new Error("User not authenticated");
 
+    // Call the stored procedure which handles the transaction
     const { data, error } = await this.supabase
-      .from("documents")
-      .insert([
-        {
-          ...document,
-          created_by: user.id, // Associate document with authenticated user
-        },
-      ])
-      .select();
+        .rpc('insert_document_with_site', {
+            p_document: document,
+            p_site_slug: siteSlug,
+            p_user_id: user.id
+        });
 
-    if (error) throw new Error(`Error inserting document: ${error.message}`);
+    if (error) {
+        console.error("Transaction error:", error);
+        throw new Error(`Error in document insertion transaction: ${error.message}`);
+    }
+
     return data;
-  }
+}
 
   async updateDocument(document: any) { 
     console.debug(">> SupabaseService.updateDocument: document: ", document);
@@ -167,6 +189,26 @@ export class SupabaseService {
 
     if (error) throw error;
     return data;
+  }
+
+  // async deleteDocument(uuid: string): Promise<void> {
+  //   const { error } = await this.supabase
+  //     .rpc('delete_document_cascade', { document_uuid: uuid });
+
+  //   if (error) {
+  //     throw new Error(`Error deleting document: ${error.message}`);
+  //   }
+  // }
+
+  async setDocumentStateToRemoved(uuid: string): Promise<void> {
+    const { error } = await this.supabase
+      .from('documents')
+      .update({ state: 'removed' })
+      .eq('id', uuid);
+
+    if (error) {
+      throw new Error(`Error updating document state: ${error.message}`);
+    }
   }
 
 }
