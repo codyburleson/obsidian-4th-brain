@@ -135,4 +135,38 @@ export class SupabaseService {
     return data;
   }
 
+  async siteSlugExists(slug: string): Promise<boolean> {
+    const { data, error } = await this.supabase
+      .from('sites')
+      .select('id')
+      .eq('slug', slug)
+      .single();
+
+    if (error && error.code !== 'PGRST116') { // PGRST116 is the "not found" error code
+      throw error;
+    }
+
+    return !!data;
+  }
+
+  async createSite(slug: string): Promise<any> {
+    const user = await this.getUser();
+    if (!user) throw new Error("User not authenticated");
+
+    const { data, error } = await this.supabase
+      .from('sites')
+      .insert([
+        {
+          slug: slug,
+          name: slug, // Using slug as name for now, could be parameterized later
+          created_by: user.id
+        }
+      ])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
 }
