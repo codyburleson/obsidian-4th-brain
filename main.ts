@@ -9,6 +9,7 @@ import {
   Setting,
   TFile,
 } from "obsidian";
+import { AlertModal } from "src/alert-modal";
 // import { emitKeypressEvents } from "readline";
 import { SupabaseService } from "./src/supabase-service";
 
@@ -21,6 +22,7 @@ export interface MyPluginSettings {
   supabaseAnonKey: string;
   supabaseEmail: string;
   supabasePassword: string;
+  defaultSiteSlug: string;
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
@@ -28,6 +30,7 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
   supabaseAnonKey: "",
   supabaseEmail: "",
   supabasePassword: "",
+  defaultSiteSlug: "",
 };
 
 export default class MyPlugin extends Plugin {
@@ -43,9 +46,13 @@ export default class MyPlugin extends Plugin {
           (file.extension === "canvas" || file.extension === "md")
         ) {
           menu.addItem((item) => {
-            item.setTitle("Sync With Server").onClick(async () => {
-              await this.syncWithServer(file);
-            });
+            item
+              .setTitle("Sync With Server")
+              .setIcon("send") // Obsidian uses the Lucide icon library: https://lucide.dev/icons
+              .setSection("4thBrain")
+              .onClick(async () => {
+                await this.syncWithServer(file);
+              });
           });
         }
       })
@@ -155,15 +162,19 @@ export default class MyPlugin extends Plugin {
   }
 
   async syncWithServer(file: TFile) {
-
     try {
+      if (!this.settings.defaultSiteSlug) {
+        new AlertModal(
+          this.app,
+          "A default site slug is required. Please configure it in the 4th Brain plugin settings before syncing."
+        ).open();
+        return;
+      }
+
       console.log(">> 4thBrain > syncWithServer() > file: ", file);
 
       const filePath = file.path;
-      const folderPath = filePath.substring(
-        0,
-        filePath.lastIndexOf("/") + 1
-      );
+      const folderPath = filePath.substring(0, filePath.lastIndexOf("/") + 1);
 
       const supabaseService = new SupabaseService(
         this.settings.supabaseUrl,
@@ -177,10 +188,7 @@ export default class MyPlugin extends Plugin {
       );
 
       // If we get here, we have an active session with a valid user
-      console.log(
-        ">> 4thBrain > Session established for user:",
-        user.email
-      );
+      console.log(">> 4thBrain > Session established for user:", user.email);
 
       // TO DO: Make an Interface for Document
       let document = {
@@ -192,44 +200,38 @@ export default class MyPlugin extends Plugin {
         content: "",
       };
 
-      await this.app.fileManager
-        .processFrontMatter(file, (fm) => {
+      await this.app.fileManager.processFrontMatter(file, (fm) => {
+        console.debug(
+          "-- 4thbrain > Sync > frontmatter: \n",
+          JSON.stringify(fm, null, 2)
+        );
 
-          console.debug(
-            "-- 4thbrain > Sync > frontmatter: \n",
-            JSON.stringify(fm, null, 2)
-          );
+        // SCENARIO: Sync to update existing document
+        // GIVEN the Obsidian user selects ‘Sync with Server
+        // WHEN the markdown document has a uuid property
+        // AND the markdown document has a version property
 
-          // SCENARIO: Sync to update existing document
-          // GIVEN the Obsidian user selects ‘Sync with Server
-          // WHEN the markdown document has a uuid property
-          // AND the markdown document has a version property
+        if (fm["uuid"] && fm["version"]) {
+          // Even when we are theoretically updating an existing doc,
+          // because we manage versions in a single table,  we still need to INSERT
 
+          document.version = fm["version"] + 1;
+          fm.version = document.version;
+        } else {
+          let uuid = crypto.randomUUID();
+          fm.uuid = uuid;
+          document.id = uuid;
+          fm.version = 1;
+          document.version = 1;
+        }
 
+        if (fm.state) {
+          document.state = fm.state;
+        }
 
-          if (fm["uuid"] && fm["version"]) {
-
-            // Even when we are theoretically updating an existing doc,
-            // because we manage versions in a single table,  we still need to INSERT
-
-            document.version = fm["version"] + 1;
-            fm.version = document.version;
-          } else {
-
-            let uuid = crypto.randomUUID();
-            fm.uuid = uuid;
-            document.id = uuid;
-            fm.version = 1;
-            document.version = 1;
-          }
-
-          if (fm.state) {
-            document.state = fm.state;
-          }
-
-          document.id = fm.uuid;
-          document.path = folderPath;
-        });
+        document.id = fm.uuid;
+        document.path = folderPath;
+      });
 
       const fileContent = await this.app.vault.cachedRead(file);
       document.content = fileContent;
@@ -244,11 +246,13 @@ export default class MyPlugin extends Plugin {
       // TODO: Implement your sync logic here
     } catch (error) {
       console.error(">> 4thBrain > Error during sync:", error);
-      new Notice("Failed to sync with Supabase: " + error.message);
+      // new Notice("Failed to sync with Supabase: " + error.message);
+      new AlertModal(
+        this.app,
+        "Failed to sync with Supabase: " + error.message
+      ).open();
     }
-
   }
-
 }
 
 class SampleModal extends Modal {
@@ -333,6 +337,20 @@ class SampleSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           })
       );
-  }
 
+    new Setting(containerEl)
+      .setName("Default Site Slug")
+      .setDesc(
+        "A URL-friendly short name for your site; the default site slug will be used when syncing documents if no site slug is provided in the frontmatter."
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder("site-slug")
+          .setValue(this.plugin.settings.defaultSiteSlug)
+          .onChange(async (value) => {
+            this.plugin.settings.defaultSiteSlug = value;
+            await this.plugin.saveSettings();
+          })
+      );
+  }
 }
