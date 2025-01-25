@@ -77,7 +77,6 @@ export default class MyPlugin extends Plugin {
 
           });
 
-
         }
       })
     );
@@ -407,15 +406,16 @@ export class SampleSettingTab extends PluginSettingTab {
       .setDesc(
         "The Supabase project anon key. If you are hosting Supabase yourself, you can fing this in the .env file (ANON_KEY in supabase/docker/.env)"
       )
-      .addText((text) =>
-        text
+      .addText((text) => {
+        text.inputEl.type = "password";
+        return text
           .setPlaceholder("anon key")
           .setValue(this.plugin.settings.supabaseAnonKey)
           .onChange(async (value) => {
             this.plugin.settings.supabaseAnonKey = value;
             await this.plugin.saveSettings();
-          })
-      );
+          });
+      });
 
     new Setting(containerEl)
       .setName("Supabase Email")
@@ -430,19 +430,20 @@ export class SampleSettingTab extends PluginSettingTab {
           })
       );
 
-    new Setting(containerEl)
+      new Setting(containerEl)
       .setName("Supabase Password")
       .setDesc("Supabase signin password")
-      .addText((text) =>
-        text
-          .setPlaceholder("anon key")
+      .addText((text) => {
+        text.inputEl.type = "password";
+        return text
+          .setPlaceholder("password")
           .setValue(this.plugin.settings.supabasePassword)
           .onChange(async (value) => {
             this.plugin.settings.supabasePassword = value;
             await this.plugin.saveSettings();
-          })
-      );
-
+          });
+      });
+      
     new Setting(containerEl)
       .setName("Default Site Slug")
       .setDesc(
