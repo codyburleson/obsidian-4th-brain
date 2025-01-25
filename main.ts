@@ -10,6 +10,7 @@ import {
   TFile,
 } from "obsidian";
 import { AlertModal } from "src/alert-modal";
+import { CreateSiteModal } from "./src/create-site-modal";
 // import { emitKeypressEvents } from "readline";
 import { SupabaseService } from "./src/supabase-service";
 
@@ -207,7 +208,7 @@ export default class MyPlugin extends Plugin {
         );
 
         // SCENARIO: Sync to update existing document
-        // GIVEN the Obsidian user selects ‘Sync with Server
+        // GIVEN the Obsidian user selects 'Sync with Server
         // WHEN the markdown document has a uuid property
         // AND the markdown document has a version property
 
@@ -271,12 +272,59 @@ class SampleModal extends Modal {
   }
 }
 
-class SampleSettingTab extends PluginSettingTab {
+export class SampleSettingTab extends PluginSettingTab {
   plugin: MyPlugin;
+  isDefaultSiteSlugDirty: boolean = false;
 
   constructor(app: App, plugin: MyPlugin) {
     super(app, plugin);
     this.plugin = plugin;
+  }
+
+  async hide() {
+    if (this.isDefaultSiteSlugDirty) {
+      const slug = this.plugin.settings.defaultSiteSlug;
+      if (slug) {
+        try {
+          const supabaseService = new SupabaseService(
+            this.plugin.settings.supabaseUrl,
+            this.plugin.settings.supabaseAnonKey
+          );
+          
+          // Ensure we have an active session
+          await supabaseService.ensureSession(
+            this.plugin.settings.supabaseEmail,
+            this.plugin.settings.supabasePassword
+          );
+
+          const exists = await supabaseService.siteSlugExists(slug);
+          
+          if (exists) {
+            console.debug(`Site with slug "${slug}" already exists`);
+          } else {
+            new CreateSiteModal(this.app, slug, async (confirmedSlug) => {
+              try {
+                const site = await supabaseService.createSite(confirmedSlug);
+                console.debug("Site created successfully:", site);
+              } catch (error) {
+                console.error("Failed to create site:", error);
+                new AlertModal(
+                  this.app,
+                  `Failed to create site: ${error.message}`
+                ).open();
+              }
+            }).open();
+          }
+        } catch (error) {
+          console.error("Error checking site slug:", error);
+          new AlertModal(
+            this.app,
+            `Error checking site slug: ${error.message}`
+          ).open();
+        }
+      }
+      this.isDefaultSiteSlugDirty = false;
+    }
   }
 
   display(): void {
@@ -349,8 +397,10 @@ class SampleSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.defaultSiteSlug)
           .onChange(async (value) => {
             this.plugin.settings.defaultSiteSlug = value;
+            this.isDefaultSiteSlugDirty = true;
             await this.plugin.saveSettings();
           })
       );
   }
 }
+
