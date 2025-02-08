@@ -48,7 +48,8 @@ CREATE TABLE IF NOT EXISTS document_site_publications (
 );
 
 CREATE TABLE IF NOT EXISTS resources (
-    path text primary key,
+    path_hash char(64) primary key,
+    path text not null,
     name text not null,
     created_at timestamptz default now(),
     last_modified timestamptz default now(),
@@ -58,10 +59,10 @@ CREATE TABLE IF NOT EXISTS resources (
 CREATE TABLE IF NOT EXISTS document_resources (
     document_id uuid not null,
     document_version integer not null,
-    resource_path text not null,
-    PRIMARY KEY (document_id, document_version, resource_path),
+    resource_path_hash char(64) not null,
+    PRIMARY KEY (document_id, document_version, resource_path_hash),
     FOREIGN KEY (document_id, document_version) REFERENCES documents(id, version),
-    FOREIGN KEY (resource_path) REFERENCES resources(path)
+    FOREIGN KEY (resource_path_hash) REFERENCES resources(path_hash)
 );
 
 -- *****************************************************
@@ -122,12 +123,45 @@ BEGIN
        SELECT 1 FROM pg_indexes 
        WHERE schemaname = 'public' 
        AND tablename = 'document_resources'
-       AND indexname = 'idx_document_resources_path'
+       AND indexname = 'idx_document_resources_path_hash'
    ) THEN
-       CREATE INDEX idx_document_resources_path 
-       ON document_resources(resource_path);
+       CREATE INDEX idx_document_resources_path_hash 
+       ON document_resources(resource_path_hash);
    END IF;
 
+END
+$$;
+
+-- *****************************************************
+-- CREATE STORAGE BUCKETS
+-- *****************************************************
+
+-- Safely create bucket if it doesn't exist
+DO $$
+BEGIN
+    -- Check if bucket exists first
+    IF NOT EXISTS (
+        SELECT 1 FROM storage.buckets WHERE id = 'resources'
+    ) THEN
+        -- Create the bucket only if it doesn't exist
+        INSERT INTO storage.buckets (id, name, public)
+        VALUES ('resources', 'resources', false);
+        
+        -- Create policies only if we just created the bucket
+        CREATE POLICY "Allow authenticated uploads"
+        ON storage.objects FOR INSERT
+        TO authenticated
+        WITH CHECK (
+            bucket_id = 'resources'
+            AND auth.role() = 'authenticated'
+        );
+
+        CREATE POLICY "Allow public downloads"
+        ON storage.objects FOR SELECT
+        USING (
+            bucket_id = 'resources'
+        );
+    END IF;
 END
 $$;
 
@@ -249,6 +283,10 @@ ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sites ENABLE ROW LEVEL SECURITY;
 ALTER TABLE document_site_publications ENABLE ROW LEVEL SECURITY;
 
+-- Enable RLS on resources tables
+ALTER TABLE resources ENABLE ROW LEVEL SECURITY;
+ALTER TABLE document_resources ENABLE ROW LEVEL SECURITY;
+
 -- The `DROP POLICY IF EXISTS` statement will remove the policy if it exists. 
 -- This makes the script idempotent - you can run it multiple times safely. 
 -- The entire operation is wrapped in a DO block to ensure it executes as a single transaction.
@@ -262,7 +300,7 @@ BEGIN
     FOR table_name IN SELECT tablename 
                       FROM pg_tables 
                       WHERE schemaname = 'public' 
-                      AND tablename IN ('documents', 'sites', 'document_site_publications')
+                      AND tablename IN ('documents', 'sites', 'document_site_publications', 'resources', 'document_resources')
     LOOP
         EXECUTE format('DROP POLICY IF EXISTS "%1$s - Enable insert for authenticated users" ON public.%1$s', table_name);
         EXECUTE format('DROP POLICY IF EXISTS "%1$s - Enable select for authenticated users" ON public.%1$s', table_name);
@@ -274,3 +312,4 @@ BEGIN
     END LOOP;
 END
 $$;
+

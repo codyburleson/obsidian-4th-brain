@@ -3,7 +3,50 @@ import {
   SupabaseClient,
   User,
 } from "@supabase/supabase-js";
+
 // import { Database } from "./types/supabase";
+
+
+// Interface for file metadata from list operation
+// interface StorageFileMetadata {
+//   name: string;
+//   id: string;
+//   updated_at: string;
+//   created_at: string;
+//   last_accessed_at?: string;
+//   metadata?: {
+//     size?: number;
+//     mimetype?: string;
+//     cacheControl?: string;
+//   };
+// }
+
+// Interface for upload response
+// interface UploadResponse {
+//   id: string;
+//   path: string;
+//   fullPath: string;
+// }
+
+interface UploadResponse {
+  path: string;
+}
+
+interface UploadOptions {
+  bucketName: string;
+  filePath: string;
+  data: Uint8Array;
+  contentType?: string;
+  //lastModified?: Date;
+}
+
+interface UploadResult {
+  success: boolean;
+  message: string;
+  data?: any;
+  error?: Error;
+}
+
 
 export class SupabaseService {
   private readonly supabase: SupabaseClient;
@@ -211,4 +254,166 @@ export class SupabaseService {
     }
   }
 
+  private async generatePathHash(path: string): Promise<string> {
+    return await crypto.subtle.digest('SHA-256', new TextEncoder().encode(path))
+      .then(hash => Array.from(new Uint8Array(hash))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join(''));
+  }
+
+  /**
+   * Checks if a resource exists and needs updating
+   * @param path the original file path
+   * @param lastModified the last modified date of the resource
+   * @returns object indicating if resource exists and needs update
+   */
+  async checkResourceExists(
+    path: string,
+    lastModified: Date
+  ): Promise<{ exists: boolean; needsUpdate: boolean }> {
+
+    console.debug(`>> SupabaseService.checkResourceExists() > originalPath: ${path}`);
+
+    const pathHash = await this.generatePathHash(path);
+    
+    // .single() throws an error if no rows or multiple rows are found
+    // .maybeSingle() returns null for the data when no rows are found, which is more appropriate for your use case where checking for existence is part of the normal flow
+    const { data, error } = await this.supabase
+      .from('resources')
+      .select('path_hash, last_modified')
+      .eq('path_hash', pathHash)
+      .maybeSingle();
+
+      if (error) {
+        console.error('Error checking resource:', error);
+        throw error;
+      }
+  
+      if (!data) {
+        return { exists: false, needsUpdate: false };
+      }
+  
+      const serverLastModified = new Date(data.last_modified);
+      const needsUpdate = serverLastModified < lastModified;
+  
+      return { exists: true, needsUpdate };
+  }
+
+  /**
+   * Uploads a resource to Supabase storage and creates/updates the resource record
+   * @param originalPath the original file path
+   * @param fileData the file contents as Blob
+   * @param lastModified the last modified date of the resource
+   */
+  // async uploadResource(
+  //   originalPath: string,
+  //   fileData: Blob,
+  //   lastModified: Date
+  // ): Promise<void> {
+  //   const pathHash = await this.generatePathHash(originalPath);
+  //   const fileName = originalPath.split('/').pop() || 'unnamed';
+  //   const storagePath = `resources/${pathHash}/${fileName}`;
+
+  //   // Upload to Storage
+  //   const { error: uploadError } = await this.supabase.storage
+  //     .from('resources')
+  //     .upload(storagePath, fileData, {
+  //       upsert: true,
+  //       contentType: fileData.type || 'application/octet-stream'
+  //     });
+
+  //   if (uploadError) {
+  //     throw new Error(`Error uploading resource: ${uploadError.message}`);
+  //   }
+
+  //   // Create/Update resource record
+  //   const { error: dbError } = await this.supabase
+  //     .from('resources')
+  //     .upsert({
+  //       path_hash: pathHash,
+  //       path: originalPath,
+  //       name: fileName,
+  //       last_modified: lastModified.toISOString()
+  //     });
+
+  //   if (dbError) {
+  //     throw new Error(`Error updating resource record: ${dbError.message}`);
+  //   }
+  // }
+
+  async checkFileExists (bucketName: string, filePath: string) {
+    const { data, error } = await this.supabase.storage
+      .from(bucketName)
+      .list(filePath)
+
+    console.debug(`-- SupabaseService.checkFileExists() > data: ${data}`);
+  
+    if (error) {
+      console.error(error)
+      return false
+    }
+  
+    const files = data.filter(item => item.name === filePath)
+    return files.length > 0
+  };
+  
+
+  // Upload file using standard upload
+  // filePath is the path of the file to upload, relative to the root of the vault, including the file name
+  async uploadFile(file: Blob, filePath: string) {
+    // bucket name here is 'resources', hard-coded because it's also hard-coded in the init-supabase.sql script
+    // but we may want to make it a param in the future...
+    const { data, error } = await this.supabase
+      .storage.from('resources')
+      .upload(filePath, file)
+    if (error) {
+      throw new Error(`-- SupabaseService.uploadFile() > Error uploading file: ${error.message}`);
+    } else {
+      console.debug(`-- SupabaseService.uploadFile() > File uploaded successfully: ${data}`);
+    }
+  }
+
+
+  async uploadFileToSupabase(
+    options: UploadOptions
+  ): Promise<UploadResult> {
+    const { bucketName, filePath, data, contentType } = options;
+  
+    try {
+      // Check if user is authenticated
+      const user = await this.getUser();
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      const { data: uploadedData, error: uploadError } = await this.supabase
+        .storage
+        .from(bucketName)
+        .upload(filePath, data, {
+          contentType,
+          upsert: true
+        });
+  
+      if (uploadError) {
+        throw new Error(`Error uploading file: ${uploadError.message}`);
+      }
+  
+      return {
+        success: true,
+        message: 'File uploaded successfully',
+        data: uploadedData as UploadResponse
+      };
+  
+    } catch (error) {
+      return {
+        success: false,
+        message: 'Upload failed',
+        error: error instanceof Error ? error : new Error('Unknown error occurred')
+      };
+    }
+  }
+
+  
+
 }
+
