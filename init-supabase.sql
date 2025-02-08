@@ -47,24 +47,6 @@ CREATE TABLE IF NOT EXISTS document_site_publications (
     FOREIGN KEY (site_id) REFERENCES sites(id)
 );
 
-CREATE TABLE IF NOT EXISTS resources (
-    path_hash char(64) primary key,
-    path text not null,
-    name text not null,
-    created_at timestamptz default now(),
-    last_modified timestamptz default now(),
-    created_by uuid references auth.users(id)
-);
-
-CREATE TABLE IF NOT EXISTS document_resources (
-    document_id uuid not null,
-    document_version integer not null,
-    resource_path_hash char(64) not null,
-    PRIMARY KEY (document_id, document_version, resource_path_hash),
-    FOREIGN KEY (document_id, document_version) REFERENCES documents(id, version),
-    FOREIGN KEY (resource_path_hash) REFERENCES resources(path_hash)
-);
-
 -- *****************************************************
 -- CREATE INDEXES
 -- *****************************************************
@@ -110,30 +92,12 @@ BEGIN
        ON document_site_publications(site_id);
    END IF;
 
-   IF NOT EXISTS (
-       SELECT 1 FROM pg_indexes 
-       WHERE schemaname = 'public' 
-       AND tablename = 'resources'
-       AND indexname = 'idx_resources_name'
-   ) THEN
-       CREATE INDEX idx_resources_name ON resources(name);
-   END IF;
-
-   IF NOT EXISTS (
-       SELECT 1 FROM pg_indexes 
-       WHERE schemaname = 'public' 
-       AND tablename = 'document_resources'
-       AND indexname = 'idx_document_resources_path_hash'
-   ) THEN
-       CREATE INDEX idx_document_resources_path_hash 
-       ON document_resources(resource_path_hash);
-   END IF;
-
 END
 $$;
 
 -- *****************************************************
 -- CREATE STORAGE BUCKETS
+-- API Must create the bucket!!!!!!
 -- *****************************************************
 
 -- Safely create bucket if it doesn't exist
@@ -274,6 +238,113 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+
+
+-- *****************************************************
+-- CREATE STORAGE BUCKET AND BUCKET POLICIES
+-- *****************************************************    
+
+-- Create the storage bucket if it doesn't exist
+INSERT INTO storage.buckets (id, name, public)
+SELECT 'resources', 'resources', true
+WHERE NOT EXISTS (
+    SELECT 1 FROM storage.buckets WHERE id = 'resources'
+);
+
+-- Create the Public Access policy if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'storage' 
+        AND tablename = 'objects' 
+        AND policyname = 'Public Access'
+    ) THEN
+        CREATE POLICY "Public Access"
+        ON storage.objects FOR SELECT
+        TO public
+        USING (bucket_id = 'resources');
+    END IF;
+END
+$$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'storage' 
+        AND tablename = 'objects' 
+        AND policyname = 'Tenant Upload Access'
+    ) THEN
+        CREATE POLICY "Tenant Upload Access"
+        ON storage.objects FOR INSERT
+        TO authenticated
+        WITH CHECK (
+            bucket_id = 'resources' 
+            AND (
+                EXISTS (
+                    SELECT 1 FROM sites
+                    WHERE sites.slug = SPLIT_PART(objects.name, '/', 2)  -- Changed from sites.name to storage.objects.name
+                    AND sites.created_by = auth.uid()
+                )
+            )
+        );
+    END IF;
+END
+$$;
+
+-- Update the other policies similarly
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'storage' 
+        AND tablename = 'objects' 
+        AND policyname = 'Tenant Update Access'
+    ) THEN
+        CREATE POLICY "Tenant Update Access"
+        ON storage.objects FOR UPDATE
+        TO authenticated
+        USING (
+            bucket_id = 'resources'
+            AND (
+                EXISTS (
+                    SELECT 1 FROM sites
+                    WHERE sites.slug = SPLIT_PART(objects.name, '/', 2)  -- Changed from sites.name
+                    AND sites.created_by = auth.uid()
+                )
+            )
+        );
+    END IF;
+END
+$$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'storage' 
+        AND tablename = 'objects' 
+        AND policyname = 'Tenant Delete Access'
+    ) THEN
+        CREATE POLICY "Tenant Delete Access"
+        ON storage.objects FOR DELETE
+        TO authenticated
+        USING (
+            bucket_id = 'resources'
+            AND (
+                EXISTS (
+                    SELECT 1 FROM sites
+                    WHERE sites.slug = SPLIT_PART(objects.name, '/', 2)  -- Changed from sites.name
+                    AND sites.created_by = auth.uid()
+                )
+            )
+        );
+    END IF;
+END
+$$;
+
+
 -- *****************************************************
 -- CREATE POLICIES
 -- *****************************************************
@@ -283,9 +354,7 @@ ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sites ENABLE ROW LEVEL SECURITY;
 ALTER TABLE document_site_publications ENABLE ROW LEVEL SECURITY;
 
--- Enable RLS on resources tables
-ALTER TABLE resources ENABLE ROW LEVEL SECURITY;
-ALTER TABLE document_resources ENABLE ROW LEVEL SECURITY;
+
 
 -- The `DROP POLICY IF EXISTS` statement will remove the policy if it exists. 
 -- This makes the script idempotent - you can run it multiple times safely. 
@@ -300,7 +369,7 @@ BEGIN
     FOR table_name IN SELECT tablename 
                       FROM pg_tables 
                       WHERE schemaname = 'public' 
-                      AND tablename IN ('documents', 'sites', 'document_site_publications', 'resources', 'document_resources')
+                      AND tablename IN ('documents', 'sites', 'document_site_publications')
     LOOP
         EXECUTE format('DROP POLICY IF EXISTS "%1$s - Enable insert for authenticated users" ON public.%1$s', table_name);
         EXECUTE format('DROP POLICY IF EXISTS "%1$s - Enable select for authenticated users" ON public.%1$s', table_name);

@@ -351,13 +351,10 @@ export default class MyPlugin extends Plugin {
                       // Upload the file and create/update the resource record
                       // await supabaseService.uploadFile(blob, vaultPath);
 
-                      
-                        
-
 
 const result = await supabaseService.uploadFileToSupabase({
-  bucketName: 'resources',
   filePath: vaultPath,
+  siteSlug: this.settings.defaultSiteSlug,
   data: uint8Array,
   contentType: 'application/octet-stream', // Is this optional? Should we use the mime type of the file?
   //lastModified: new Date() // Optional
