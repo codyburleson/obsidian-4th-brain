@@ -47,6 +47,23 @@ CREATE TABLE IF NOT EXISTS document_site_publications (
     FOREIGN KEY (site_id) REFERENCES sites(id)
 );
 
+CREATE TABLE IF NOT EXISTS resources (
+    path text primary key,
+    name text not null,
+    created_at timestamptz default now(),
+    last_modified timestamptz default now(),
+    created_by uuid references auth.users(id)
+);
+
+CREATE TABLE IF NOT EXISTS document_resources (
+    document_id uuid not null,
+    document_version integer not null,
+    resource_path text not null,
+    PRIMARY KEY (document_id, document_version, resource_path),
+    FOREIGN KEY (document_id, document_version) REFERENCES documents(id, version),
+    FOREIGN KEY (resource_path) REFERENCES resources(path)
+);
+
 -- *****************************************************
 -- CREATE INDEXES
 -- *****************************************************
@@ -90,6 +107,25 @@ BEGIN
    ) THEN
        CREATE INDEX idx_document_site_publications_site_id 
        ON document_site_publications(site_id);
+   END IF;
+
+   IF NOT EXISTS (
+       SELECT 1 FROM pg_indexes 
+       WHERE schemaname = 'public' 
+       AND tablename = 'resources'
+       AND indexname = 'idx_resources_name'
+   ) THEN
+       CREATE INDEX idx_resources_name ON resources(name);
+   END IF;
+
+   IF NOT EXISTS (
+       SELECT 1 FROM pg_indexes 
+       WHERE schemaname = 'public' 
+       AND tablename = 'document_resources'
+       AND indexname = 'idx_document_resources_path'
+   ) THEN
+       CREATE INDEX idx_document_resources_path 
+       ON document_resources(resource_path);
    END IF;
 
 END
