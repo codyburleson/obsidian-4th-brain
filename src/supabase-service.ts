@@ -3,7 +3,26 @@ import {
   SupabaseClient,
   User,
 } from "@supabase/supabase-js";
-// import { Database } from "./types/supabase";
+
+interface UploadResponse {
+  path: string;
+}
+
+interface UploadOptions {
+  filePath: string;
+  siteSlug: string;
+  data: Uint8Array;
+  contentType?: string;
+  //lastModified?: Date;
+}
+
+interface UploadResult {
+  success: boolean;
+  message: string;
+  data?: any;
+  error?: Error;
+}
+
 
 export class SupabaseService {
   private readonly supabase: SupabaseClient;
@@ -162,9 +181,10 @@ export class SupabaseService {
       .from('sites')
       .select('id')
       .eq('slug', slug)
-      .single();
+      .maybeSingle();
 
-    if (error && error.code !== 'PGRST116') { // PGRST116 is the "not found" error code
+    if (error) {
+      console.error('Error checking site:', error);
       throw error;
     }
 
@@ -211,4 +231,92 @@ export class SupabaseService {
     }
   }
 
+  private async generatePathHash(path: string): Promise<string> {
+    return await crypto.subtle.digest('SHA-256', new TextEncoder().encode(path))
+      .then(hash => Array.from(new Uint8Array(hash))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join(''));
+  }
+
+  /**
+   * Checks if a resource exists and needs updating
+   * @param path the original file path
+   * @param lastModified the last modified date of the resource
+   * @returns object indicating if resource exists and needs update
+   */
+  async checkResourceExists(
+    path: string,
+    lastModified: Date
+  ): Promise<{ exists: boolean; needsUpdate: boolean }> {
+
+    console.debug(`>> SupabaseService.checkResourceExists() > originalPath: ${path}`);
+
+    const pathHash = await this.generatePathHash(path);
+    
+    // .single() throws an error if no rows or multiple rows are found
+    // .maybeSingle() returns null for the data when no rows are found, which is more appropriate for your use case where checking for existence is part of the normal flow
+    const { data, error } = await this.supabase
+      .from('resources')
+      .select('path_hash, last_modified')
+      .eq('path_hash', pathHash)
+      .maybeSingle();
+
+      if (error) {
+        console.error('Error checking resource:', error);
+        throw error;
+      }
+  
+      if (!data) {
+        return { exists: false, needsUpdate: false };
+      }
+  
+      const serverLastModified = new Date(data.last_modified);
+      const needsUpdate = serverLastModified < lastModified;
+  
+      return { exists: true, needsUpdate };
+  }
+
+  async uploadFileToSupabase(
+    options: UploadOptions
+  ): Promise<UploadResult> {
+    const { filePath, siteSlug, data, contentType } = options;
+  
+    try {
+      // Check if user is authenticated
+      const user = await this.getUser();
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      // Ensure the path starts with sites/{site-slug}
+      const safePath = `sites/${siteSlug}/${filePath.replace(/^\/+/, '')}`;
+
+      const { data: uploadedData, error: uploadError } = await this.supabase
+        .storage
+        .from('resources')  // Always use the 'resources' bucket
+        .upload(safePath, data, {
+          contentType,
+          upsert: true
+        });
+  
+      if (uploadError) {
+        throw new Error(`Error uploading file: ${uploadError.message}`);
+      }
+  
+      return {
+        success: true,
+        message: 'File uploaded successfully',
+        data: uploadedData as UploadResponse
+      };
+  
+    } catch (error) {
+      return {
+        success: false,
+        message: 'Upload failed',
+        error: error instanceof Error ? error : new Error('Unknown error occurred')
+      };
+    }
+  }
+
 }
+

@@ -1,6 +1,9 @@
 import {
   App,
+  CachedMetadata,
   Editor,
+  EmbedCache,
+  getLinkpath,
   MarkdownView,
   Modal,
   Notice,
@@ -59,22 +62,14 @@ export default class MyPlugin extends Plugin {
               });
           });
 
-          // We need to get the uuid from the frontmatter before the file is deleted
+          // It is possible that the user right-clicked on a document because they are aout to delete it.
+          // We need to get the uuid from the frontmatter before the file is deleted!
           this.app.fileManager.processFrontMatter(file, (fm) => {
-
-            // SCENARIO: Sync to update existing document
-            // GIVEN the Obsidian user selects 'Sync with Server
-            // WHEN the markdown document has a uuid property
-            // AND the markdown document has a version property
-    
             if (fm["uuid"]) {
               this.lastTouchedDocumentUuid = fm["uuid"];
             } else {
               this.lastTouchedDocumentUuid = null;
             }
-
-            console.log("-- 4thBrain.onLoad() > file-menu > lastTouchedSDocumentUuid: ", this.lastTouchedDocumentUuid);
-
           });
 
         }
@@ -197,6 +192,7 @@ export default class MyPlugin extends Plugin {
 
   async syncWithServer(file: TFile) {
     try {
+
       if (!this.settings.defaultSiteSlug) {
         new AlertModal(
           this.app,
@@ -215,7 +211,9 @@ export default class MyPlugin extends Plugin {
         this.settings.supabaseAnonKey
       );
 
+      // ENSURE SESSION ------------------------------------------------------------------------
       // This will handle checking the session and signing in if needed
+      // ---------------------------------------------------------------------------------------
       const user = await supabaseService.ensureSession(
         this.settings.supabaseEmail,
         this.settings.supabasePassword
@@ -254,41 +252,146 @@ export default class MyPlugin extends Plugin {
         content: "",
       };
 
-      await this.app.fileManager.processFrontMatter(file, (fm) => {
+      await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
         console.debug(
           "-- 4thbrain > Sync > frontmatter: \n",
-          JSON.stringify(fm, null, 2)
+          JSON.stringify(frontmatter, null, 2)
         );
 
-        // SCENARIO: Sync to update existing document
-        // GIVEN the Obsidian user selects 'Sync with Server
-        // WHEN the markdown document has a uuid property
-        // AND the markdown document has a version property
 
-        if (fm["uuid"] && fm["version"]) {
-          // Even when we are theoretically updating an existing doc,
-          // because we manage versions in a single table,  we still need to INSERT
 
-          document.version = fm["version"] + 1;
-          fm.version = document.version;
+        if (frontmatter["uuid"] && frontmatter["version"]) {
+          // Document already exists on the server, we assume, since it has a uuid and version
+          // However, even though we are updating an existing doc, we still need to INSERT it 
+          // into the databased instead of UPDATE an existing row because each version is a new row.
+          document.version = frontmatter["version"] + 1;
+          frontmatter.version = document.version;
         } else {
           let uuid = crypto.randomUUID();
-          fm.uuid = uuid;
+          frontmatter.uuid = uuid;
           document.id = uuid;
-          fm.version = 1;
+          frontmatter.version = 1;
           document.version = 1;
         }
 
-        if (fm.state) {
-          document.state = fm.state;
+        if (frontmatter.state) {
+          document.state = frontmatter.state;
         }
 
-        document.id = fm.uuid;
+        document.id = frontmatter.uuid;
         document.path = folderPath;
       });
 
       const fileContent = await this.app.vault.cachedRead(file);
       document.content = fileContent;
+
+      // Right here, now that we have the entire document content, we can parse it 
+      // for all of the image attachments from the document. For now, I am attempting this via
+      // Obsidian API methods, but it may be necessary to parse the markdown AST instead.
+
+      const fileCache: CachedMetadata | null = this.app.metadataCache.getFileCache(file);
+
+      if (fileCache) {
+        console.debug(">> 4thBrain > Sync > fileCache: ", fileCache);
+        if(fileCache.embeds) {
+            console.debug(">> 4thBrain > Sync > Embedded files: ", fileCache.embeds);
+            let embeds: EmbedCache[] = fileCache.embeds;
+
+            // For each embedded file, we need to get the full system file path
+            // and upload it to the server. 
+            // We don't want to upload the same file twice, so we need to check if the file
+            // already exists on the server before uploading it. If it does, we compare the 
+            // modified date of the file with the modified date of the file on the server.
+            // If the modified date is the same, we skip the upload.
+            // If the modified date is different, we upload the file.
+            // We also need to check if the file is a duplicate of another file on the server.
+            // If it is, we skip the upload.
+            // If it is not, we upload the file.
+            
+            for (let embed of embeds) {
+
+              const embedFile: TFile | null = this.app.metadataCache.getFirstLinkpathDest( getLinkpath(embed.link), embed.link );
+
+              if (embedFile) {
+
+                // We store the file in the bucket with the same path as the file in the vault.
+                let vaultPath = embedFile.path;
+                console.debug(`-- 4thBrain > Sync > vaultPath: ${vaultPath}`);
+                
+                let appPath = this.app.vault.adapter.getResourcePath(embedFile.path);
+                console.debug(`-- 4thBrain > Sync > appPath: ${appPath}`);
+
+                const lastModifiedDate = new Date(embedFile.stat.mtime);
+
+                // We'll need the full path to the file in the bucket in order to upload it!
+                // const filePath = decodeURIComponent(appPath.replace(/app:\/\/[^\/]+\//, '/').split('?')[0]);
+                // console.debug(`-- 4thBrain > Sync > filePath: ${filePath}`);
+
+                // const encodedPath = encodeURIComponent(filePath);
+                // console.debug(`-- 4thBrain > Sync > encodedPath: ${encodedPath}`);
+                
+                try {
+
+                  // const fileExists = await supabaseService.checkFileExists('resources', vaultPath);
+                  // console.debug(`-- 4thBrain > Sync > fileExists: ${fileExists}`);
+
+                  // const { exists, needsUpdate } = await supabaseService.checkResourceExists(
+                  //   vaultPath,
+                  //   lastModifiedDate
+                  // );
+              
+                    try {
+                      // Read the file as an array buffer
+                      const fileBuffer = await this.app.vault.adapter.readBinary(embedFile.path);
+                      
+                      // Convert ArrayBuffer to Uint8Array for upload
+                      const uint8Array = new Uint8Array(fileBuffer);
+                      //const blob = new Blob([uint8Array]);
+                      
+                      // Upload the file and create/update the resource record
+                      // await supabaseService.uploadFile(blob, vaultPath);
+
+
+const result = await supabaseService.uploadFileToSupabase({
+  filePath: vaultPath,
+  siteSlug: this.settings.defaultSiteSlug,
+  data: uint8Array,
+  contentType: 'application/octet-stream', // Is this optional? Should we use the mime type of the file?
+  //lastModified: new Date() // Optional
+  //lastModified: lastModifiedDate // Optional
+});
+
+if (result.success) {
+  console.log(result.message);
+  console.log('File data:', result.data);
+} else {
+  console.error(result.message);
+  console.error('Error:', result.error);
+}
+
+
+
+
+
+                    } catch (readError) {
+                      console.error(`>> 4thBrain > Sync > Error reading file: ${vaultPath}`, readError);
+                      throw new Error(`Failed to read file: ${readError.message}`);
+                    }
+
+                } catch (error) {
+                  // Only log as error if it's not a "no rows" result
+                  if (error.code !== 'PGRST116') {
+                    console.error(`>> 4thBrain > Sync > Error checking resource: ${vaultPath}`, error);
+                  } else {
+                    console.debug(`>> 4thBrain > Sync > No existing resource found for: ${vaultPath}`);
+                  }
+                }
+              } else {
+                console.warn(">> 4thBrain > Sync > Could not find associated file for embed: ", embed.link);
+              }
+            }
+        }
+      }
 
       console.debug(
         "-- 4thbrain > Sync > document just before CRUD operation: \n",
@@ -299,14 +402,13 @@ export default class MyPlugin extends Plugin {
         document, 
         this.settings.defaultSiteSlug
       );
+      console.log("-- 4thBrain > Sync > crudResult: ", crudResult);
 
-      // TODO: Implement your sync logic here
     } catch (error) {
       console.error(">> 4thBrain > Error during sync:", error);
-      // new Notice("Failed to sync with Supabase: " + error.message);
       new AlertModal(
         this.app,
-        "Failed to sync with Supabase: " + error.message
+        "Failed to sync with server: " + error.message
       ).open();
     }
   }

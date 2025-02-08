@@ -15,7 +15,7 @@ export class CreateSiteModal extends Modal {
     contentEl.empty();
     
     contentEl.createEl("p", { 
-      text: `The site "${this.slug}" does not exist. Would you like to create it?` 
+      text: `The site "${this.slug}" does not exist on the server. Would you like to create it?` 
     });
     
     const buttonContainer = contentEl.createDiv({ cls: "modal-button-container" });

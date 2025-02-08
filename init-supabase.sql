@@ -96,6 +96,40 @@ END
 $$;
 
 -- *****************************************************
+-- CREATE STORAGE BUCKETS
+-- API Must create the bucket!!!!!!
+-- *****************************************************
+
+-- Safely create bucket if it doesn't exist
+DO $$
+BEGIN
+    -- Check if bucket exists first
+    IF NOT EXISTS (
+        SELECT 1 FROM storage.buckets WHERE id = 'resources'
+    ) THEN
+        -- Create the bucket only if it doesn't exist
+        INSERT INTO storage.buckets (id, name, public)
+        VALUES ('resources', 'resources', false);
+        
+        -- Create policies only if we just created the bucket
+        CREATE POLICY "Allow authenticated uploads"
+        ON storage.objects FOR INSERT
+        TO authenticated
+        WITH CHECK (
+            bucket_id = 'resources'
+            AND auth.role() = 'authenticated'
+        );
+
+        CREATE POLICY "Allow public downloads"
+        ON storage.objects FOR SELECT
+        USING (
+            bucket_id = 'resources'
+        );
+    END IF;
+END
+$$;
+
+-- *****************************************************
 -- CREATE FUNCTIONS
 -- *****************************************************
 
@@ -204,6 +238,113 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+
+
+-- *****************************************************
+-- CREATE STORAGE BUCKET AND BUCKET POLICIES
+-- *****************************************************    
+
+-- Create the storage bucket if it doesn't exist
+INSERT INTO storage.buckets (id, name, public)
+SELECT 'resources', 'resources', true
+WHERE NOT EXISTS (
+    SELECT 1 FROM storage.buckets WHERE id = 'resources'
+);
+
+-- Create the Public Access policy if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'storage' 
+        AND tablename = 'objects' 
+        AND policyname = 'Public Access'
+    ) THEN
+        CREATE POLICY "Public Access"
+        ON storage.objects FOR SELECT
+        TO public
+        USING (bucket_id = 'resources');
+    END IF;
+END
+$$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'storage' 
+        AND tablename = 'objects' 
+        AND policyname = 'Tenant Upload Access'
+    ) THEN
+        CREATE POLICY "Tenant Upload Access"
+        ON storage.objects FOR INSERT
+        TO authenticated
+        WITH CHECK (
+            bucket_id = 'resources' 
+            AND (
+                EXISTS (
+                    SELECT 1 FROM sites
+                    WHERE sites.slug = SPLIT_PART(objects.name, '/', 2)  -- Changed from sites.name to storage.objects.name
+                    AND sites.created_by = auth.uid()
+                )
+            )
+        );
+    END IF;
+END
+$$;
+
+-- Update the other policies similarly
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'storage' 
+        AND tablename = 'objects' 
+        AND policyname = 'Tenant Update Access'
+    ) THEN
+        CREATE POLICY "Tenant Update Access"
+        ON storage.objects FOR UPDATE
+        TO authenticated
+        USING (
+            bucket_id = 'resources'
+            AND (
+                EXISTS (
+                    SELECT 1 FROM sites
+                    WHERE sites.slug = SPLIT_PART(objects.name, '/', 2)  -- Changed from sites.name
+                    AND sites.created_by = auth.uid()
+                )
+            )
+        );
+    END IF;
+END
+$$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'storage' 
+        AND tablename = 'objects' 
+        AND policyname = 'Tenant Delete Access'
+    ) THEN
+        CREATE POLICY "Tenant Delete Access"
+        ON storage.objects FOR DELETE
+        TO authenticated
+        USING (
+            bucket_id = 'resources'
+            AND (
+                EXISTS (
+                    SELECT 1 FROM sites
+                    WHERE sites.slug = SPLIT_PART(objects.name, '/', 2)  -- Changed from sites.name
+                    AND sites.created_by = auth.uid()
+                )
+            )
+        );
+    END IF;
+END
+$$;
+
+
 -- *****************************************************
 -- CREATE POLICIES
 -- *****************************************************
@@ -212,6 +353,8 @@ $$ LANGUAGE plpgsql;
 ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sites ENABLE ROW LEVEL SECURITY;
 ALTER TABLE document_site_publications ENABLE ROW LEVEL SECURITY;
+
+
 
 -- The `DROP POLICY IF EXISTS` statement will remove the policy if it exists. 
 -- This makes the script idempotent - you can run it multiple times safely. 
@@ -238,3 +381,4 @@ BEGIN
     END LOOP;
 END
 $$;
+
